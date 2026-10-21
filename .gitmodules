@@ -1,6 +1,6 @@
 [submodule "lib/chibios"]
 	path = lib/chibios
-	url = https://github.com/Keychron/ChibiOS
+	url = https://github.com/rafale77/ChibiOS
 	branch = 25q3
 [submodule "lib/chibios-contrib"]
 	path = lib/chibios-contrib
