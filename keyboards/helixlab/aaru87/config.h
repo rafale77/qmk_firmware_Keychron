@@ -14,6 +14,6 @@
 #endif
 
 // Correct colors for strange strong blue on Aaru. Cyan
-# define FIXED_BG_H 145
-# define FIXED_BG_S 100
-# define FIXED_BG_V 100
+#define FIXED_BG_HUE_DEG 145   // 0-360
+#define FIXED_BG_SAT_PCT 100   // 0-100
+#define FIXED_BG_VAL_PCT 100    // 0-100

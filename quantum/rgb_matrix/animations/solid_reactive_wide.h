@@ -12,24 +12,29 @@ RGB_MATRIX_EFFECT(SOLID_REACTIVE_MULTIWIDE)
 #        ifndef FIXED_BG_BLEND_DEFINED
 #            define FIXED_BG_BLEND_DEFINED
 
-// Fixed background in HSV (0-255 scale). Override in config.h.
-#            ifndef FIXED_BG_H
-#                define FIXED_BG_H 170 // blue
+// Fixed background in standard units. Override in config.h.
+#            ifndef FIXED_BG_HUE_DEG
+#                define FIXED_BG_HUE_DEG 180 // 0-360 (240 = blue)
 #            endif
-#            ifndef FIXED_BG_S
-#                define FIXED_BG_S 255
+#            ifndef FIXED_BG_SAT_PCT
+#                define FIXED_BG_SAT_PCT 100 // 0-100
 #            endif
-#            ifndef FIXED_BG_V
-#                define FIXED_BG_V 60
+#            ifndef FIXED_BG_VAL_PCT
+#                define FIXED_BG_VAL_PCT 100  // 0-100
 #            endif
+
+// Convert to QMK's 0-255 scale (32-bit math so AVR doesn't overflow)
+#            define FIXED_BG_H ((uint8_t)((((uint32_t)(FIXED_BG_HUE_DEG % 360) * 255UL) + 180UL) / 360UL))
+#            define FIXED_BG_S ((uint8_t)((((uint32_t)(FIXED_BG_SAT_PCT) * 255UL) + 50UL) / 100UL))
+#            define FIXED_BG_V ((uint8_t)((((uint32_t)(FIXED_BG_VAL_PCT) * 255UL) + 50UL) / 100UL))
 
 // amount: 0 = background, 255 = full splash color.
 static inline rgb_t fixed_bg_blend(uint8_t amount, hsv_t sp) {
-    int8_t dh = (int8_t)(sp.h - FIXED_BG_H);
+    int8_t dh = (int8_t)(sp.h - FIXED_BG_H); // shortest way around the hue wheel
     hsv_t  out;
-    out.h = (uint8_t)(FIXED_BG_H + ((int16_t)dh * amount) / 255);
-    out.s = (uint8_t)(FIXED_BG_S + (((int16_t)sp.s - FIXED_BG_S) * amount) / 255);
-    out.v = (uint8_t)(FIXED_BG_V + (((int16_t)sp.v - FIXED_BG_V) * amount) / 255);
+    out.h = (uint8_t)(FIXED_BG_H + ((int32_t)dh * amount) / 255);
+    out.s = (uint8_t)(FIXED_BG_S + (((int32_t)sp.s - FIXED_BG_S) * amount) / 255);
+    out.v = (uint8_t)(FIXED_BG_V + (((int32_t)sp.v - FIXED_BG_V) * amount) / 255);
     return rgb_matrix_hsv_to_rgb(out);
 }
 #        endif // FIXED_BG_BLEND_DEFINED
