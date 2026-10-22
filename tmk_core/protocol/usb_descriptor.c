@@ -535,6 +535,9 @@ const USB_Descriptor_Device_t PROGMEM DeviceDescriptor = {
 /*
  * Configuration descriptors
  */
+ #ifdef __AVR__
+const
+#endif
 USB_Descriptor_Configuration_t PROGMEM ConfigurationDescriptor = {
     .Config = {
         .Header = {
@@ -1514,4 +1517,3 @@ uint16_t get_usb_vendor_descriptor(uint8_t recipient, uint8_t reqeuest, const ui
     return Size;
 }
 #endif
-

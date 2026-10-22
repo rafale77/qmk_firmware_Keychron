@@ -1,7 +1,9 @@
 {
-    "manufacturer": "Helix Lab",
     "keyboard_name": "AARU87",
+    "manufacturer": "Helix Lab",
     "maintainer": "luantty2",
+    "url": "https://helix.site",
+    "processor": "at90usb646",
     "bootloader": "atmel-dfu",
     "diode_direction": "COL2ROW",
     "features": {
@@ -11,7 +13,5 @@
         "extrakey": true,
         "mousekey": true,
         "nkro": true
-    },
-    "processor": "at90usb647",
-    "url": "https://helix.site"
+    }
 }
