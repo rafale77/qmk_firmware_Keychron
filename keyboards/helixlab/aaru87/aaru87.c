@@ -1,6 +1,44 @@
 // Copyright 2022 luantty2 (@luantty2)
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include QMK_KEYBOARD_H
+
+#if defined(RGB_MATRIX_ENABLE) && (defined(ENABLE_RGB_MATRIX_SOLID_SPLASH) || defined(ENABLE_RGB_MATRIX_SOLID_MULTISPLASH) || defined(ENABLE_RGB_MATRIX_SOLID_REACTIVE_WIDE) || defined(ENABLE_RGB_MATRIX_SOLID_REACTIVE_MULTIWIDE))
+#    define AARU87_SOLID_FX
+#    ifdef VIA_ENABLE
+#        include "via.h"
+#    endif
+extern uint8_t solid_fx_hue, solid_fx_sat, solid_fx_val, solid_fx_fade_pct;
+
+#define SOLID_FX_MAGIC 0xA5
+
+typedef struct {
+    uint8_t magic, hue, sat, val, fade_pct;
+} solid_fx_eeprom_t;
+
+static void solid_fx_save(void) {
+    solid_fx_eeprom_t d = {SOLID_FX_MAGIC, solid_fx_hue, solid_fx_sat, solid_fx_val, solid_fx_fade_pct};
+    eeconfig_update_kb_datablock(&d, 0, sizeof(d));
+}
+
+static void solid_fx_load(void) {
+    solid_fx_eeprom_t d;
+    eeconfig_read_kb_datablock(&d, 0, sizeof(d));
+    if (d.magic != SOLID_FX_MAGIC) { // blank or stale EEPROM: keep compile-time defaults and store them
+        solid_fx_save();
+        return;
+    }
+    solid_fx_hue      = d.hue;
+    solid_fx_sat      = d.sat;
+    solid_fx_val      = d.val;
+    solid_fx_fade_pct = d.fade_pct > 100 ? 100 : d.fade_pct;
+}
+
+// Called when EEPROM is reset: writes the compile-time defaults
+void eeconfig_init_kb_datablock(void) {
+    solid_fx_save();
+}
+#endif
+
 #ifdef RGB_MATRIX_ENABLE
 #    include "rgb_matrix_effects_custom.h"
 #endif
@@ -18,6 +56,9 @@ void keyboard_post_init_kb(void) {
     rgb_matrix_set_target_val();
 #endif
     wait_ms(100);
+    #ifdef AARU87_SOLID_FX
+      solid_fx_load();
+    #endif
     keyboard_post_init_user();
 }
 
@@ -164,3 +205,66 @@ void eeconfig_init_kb(void) {
 #endif
     eeconfig_init_user();
 }
+#if defined(AARU87_SOLID_FX) && defined(VIA_ENABLE)
+enum {
+    id_solid_fx_color      = 1, // hue, sat
+    id_solid_fx_brightness = 2,
+    id_solid_fx_fade       = 3,
+};
+
+void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
+    // data = [ command_id, channel_id, value_id, value_data... ]
+    uint8_t *command_id = &(data[0]);
+    uint8_t *channel_id = &(data[1]);
+    uint8_t *value_id   = &(data[2]);
+    uint8_t *value_data = &(data[3]);
+
+    if (*channel_id != id_custom_channel) {
+        *command_id = id_unhandled;
+        return;
+    }
+
+    switch (*command_id) {
+        case id_custom_set_value:
+            switch (*value_id) {
+                case id_solid_fx_color:
+                    solid_fx_hue = value_data[0];
+                    solid_fx_sat = value_data[1];
+                    break;
+                case id_solid_fx_brightness:
+                    solid_fx_val = value_data[0];
+                    break;
+                case id_solid_fx_fade:
+                    solid_fx_fade_pct = value_data[0] > 100 ? 100 : value_data[0];
+                    break;
+                default:
+                    *command_id = id_unhandled;
+                    break;
+            }
+            break;
+        case id_custom_get_value:
+            switch (*value_id) {
+                case id_solid_fx_color:
+                    value_data[0] = solid_fx_hue;
+                    value_data[1] = solid_fx_sat;
+                    break;
+                case id_solid_fx_brightness:
+                    value_data[0] = solid_fx_val;
+                    break;
+                case id_solid_fx_fade:
+                    value_data[0] = solid_fx_fade_pct;
+                    break;
+                default:
+                    *command_id = id_unhandled;
+                    break;
+            }
+            break;
+        case id_custom_save:
+            solid_fx_save();
+            break;
+        default:
+            *command_id = id_unhandled;
+            break;
+    }
+}
+#endif

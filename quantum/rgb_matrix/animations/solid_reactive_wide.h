@@ -9,40 +9,63 @@ RGB_MATRIX_EFFECT(SOLID_REACTIVE_MULTIWIDE)
 
 #    ifdef RGB_MATRIX_CUSTOM_EFFECT_IMPLS
 
-#        ifndef FIXED_BG_BLEND_DEFINED
-#            define FIXED_BG_BLEND_DEFINED
+/// ---- Shared helpers: keep this block identical in solid_splash.h and solid_reactive_wide.h ----
+#        ifndef SOLID_FX_HELPERS_DEFINED
+#            define SOLID_FX_HELPERS_DEFINED
 
-// Fixed background in standard units. Override in config.h.
-#            ifndef FIXED_BG_HUE_DEG
-#                define FIXED_BG_HUE_DEG 180 // 0-360 (240 = blue)
+// Power-on defaults (VIA can change them at runtime). Override in config.h.
+#            ifndef SOLID_FX_HUE_DEG
+#                define SOLID_FX_HUE_DEG 60 // 0-360
 #            endif
-#            ifndef FIXED_BG_SAT_PCT
-#                define FIXED_BG_SAT_PCT 100 // 0-100
+#            ifndef SOLID_FX_SAT_PCT
+#                define SOLID_FX_SAT_PCT 100 // 0-100
 #            endif
-#            ifndef FIXED_BG_VAL_PCT
-#                define FIXED_BG_VAL_PCT 100  // 0-100
+#            ifndef SOLID_FX_VAL_PCT
+#                define SOLID_FX_VAL_PCT 100 // 0-100
+#            endif
+#            ifndef SOLID_FX_FADE_PCT
+#                define SOLID_FX_FADE_PCT 20 // share of the animation spent fading out
+#            endif
+#            ifndef SOLID_FX_LENGTH
+#                define SOLID_FX_LENGTH 255 // animation lifetime in ticks (stock = 255)
 #            endif
 
-// Convert to QMK's 0-255 scale (32-bit math so AVR doesn't overflow)
-#            define FIXED_BG_H ((uint8_t)((((uint32_t)(FIXED_BG_HUE_DEG % 360) * 255UL) + 180UL) / 360UL))
-#            define FIXED_BG_S ((uint8_t)((((uint32_t)(FIXED_BG_SAT_PCT) * 255UL) + 50UL) / 100UL))
-#            define FIXED_BG_V ((uint8_t)((((uint32_t)(FIXED_BG_VAL_PCT) * 255UL) + 50UL) / 100UL))
+// Runtime values. Hue/sat/val use QMK's 0-255 scale, fade is 0-100.
+// Not static: keyboard code (VIA handler, EEPROM) accesses them with extern.
+uint8_t solid_fx_hue      = (uint8_t)((((uint32_t)(SOLID_FX_HUE_DEG % 360) * 255UL) + 180UL) / 360UL);
+uint8_t solid_fx_sat      = (uint8_t)((((uint32_t)(SOLID_FX_SAT_PCT) * 255UL) + 50UL) / 100UL);
+uint8_t solid_fx_val      = (uint8_t)((((uint32_t)(SOLID_FX_VAL_PCT) * 255UL) + 50UL) / 100UL);
+uint8_t solid_fx_fade_pct = SOLID_FX_FADE_PCT;
 
-// amount: 0 = background, 255 = full splash color.
-static inline rgb_t fixed_bg_blend(uint8_t amount, hsv_t sp) {
-    int8_t dh = (int8_t)(sp.h - FIXED_BG_H); // shortest way around the hue wheel
+// age: ticks since the animation reached this LED. 255 during the hold, ramps to 0 over the
+// last solid_fx_fade_pct percent of the lifetime, then 0.
+static inline uint8_t solid_fx_amount(uint32_t age) {
+    if (age >= SOLID_FX_LENGTH) return 0;
+    uint32_t fade_len = ((uint32_t)SOLID_FX_LENGTH * solid_fx_fade_pct) / 100UL;
+    if (fade_len == 0 || age < (uint32_t)SOLID_FX_LENGTH - fade_len) return 255;
+    return (uint8_t)((((uint32_t)SOLID_FX_LENGTH - age) * 255UL) / fade_len);
+}
+
+// Blend from the live background color to the animation color in HSV, shortest hue path.
+// amount: 0 = background, 255 = animation color.
+static inline rgb_t solid_fx_blend(uint8_t amount, hsv_t bg) {
+    int8_t dh = (int8_t)(solid_fx_hue - bg.h);
     hsv_t  out;
-    out.h = (uint8_t)(FIXED_BG_H + ((int32_t)dh * amount) / 255);
-    out.s = (uint8_t)(FIXED_BG_S + (((int32_t)sp.s - FIXED_BG_S) * amount) / 255);
-    out.v = (uint8_t)(FIXED_BG_V + (((int32_t)sp.v - FIXED_BG_V) * amount) / 255);
+    out.h = (uint8_t)(bg.h + ((int32_t)dh * amount) / 255);
+    out.s = (uint8_t)(bg.s + (((int32_t)solid_fx_sat - bg.s) * amount) / 255);
+    out.v = (uint8_t)(bg.v + (((int32_t)solid_fx_val - bg.v) * amount) / 255);
     return rgb_matrix_hsv_to_rgb(out);
 }
-#        endif // FIXED_BG_BLEND_DEFINED
+#        endif // SOLID_FX_HELPERS_DEFINED
+// ---- end shared helpers ----
 
 #        ifdef ENABLE_RGB_MATRIX_SOLID_REACTIVE_WIDE
 bool SOLID_REACTIVE_WIDE(effect_params_t* params) {
     RGB_MATRIX_USE_LIMITS(led_min, led_max);
-    uint8_t count = g_last_hit_tracker.count;
+
+    const hsv_t bg_hsv = rgb_matrix_config.hsv;
+    const rgb_t bg_rgb = rgb_matrix_hsv_to_rgb(bg_hsv);
+    uint8_t     count  = g_last_hit_tracker.count;
 
     for (uint8_t i = led_min; i < led_max; i++) {
         RGB_MATRIX_TEST_LED_FLAGS();
@@ -54,12 +77,11 @@ bool SOLID_REACTIVE_WIDE(effect_params_t* params) {
             int16_t  dy   = g_led_config.point[i].y - g_last_hit_tracker.y[j];
             uint8_t  dist = sqrt16(dx * dx + dy * dy);
             uint16_t tick = scale16by8(g_last_hit_tracker.tick[j], qadd8(rgb_matrix_config.speed, 1));
-            uint16_t eff  = tick + dist * 5;
-            if (eff > 255) eff = 255;
-            amount = 255 - eff;
+            uint8_t  a    = solid_fx_amount((uint32_t)tick + (uint32_t)dist * 5);
+            if (a > amount) amount = a;
         }
 
-        rgb_t c = fixed_bg_blend(amount, rgb_matrix_config.hsv);
+        rgb_t c = amount ? solid_fx_blend(amount, bg_hsv) : bg_rgb;
         rgb_matrix_set_color(i, c.r, c.g, c.b);
     }
     return rgb_matrix_check_finished_leds(led_max);
@@ -69,24 +91,26 @@ bool SOLID_REACTIVE_WIDE(effect_params_t* params) {
 #        ifdef ENABLE_RGB_MATRIX_SOLID_REACTIVE_MULTIWIDE
 bool SOLID_REACTIVE_MULTIWIDE(effect_params_t* params) {
     RGB_MATRIX_USE_LIMITS(led_min, led_max);
-    uint8_t count = g_last_hit_tracker.count;
+
+    const hsv_t bg_hsv = rgb_matrix_config.hsv;
+    const rgb_t bg_rgb = rgb_matrix_hsv_to_rgb(bg_hsv);
+    uint8_t     count  = g_last_hit_tracker.count;
 
     for (uint8_t i = led_min; i < led_max; i++) {
         RGB_MATRIX_TEST_LED_FLAGS();
         uint8_t amount = 0;
 
-        // Multiwide: all recent presses, glows add up
+        // Multiwide: every tracked press has its own disc; strongest wins
         for (uint8_t j = 0; j < count; j++) {
             int16_t  dx   = g_led_config.point[i].x - g_last_hit_tracker.x[j];
             int16_t  dy   = g_led_config.point[i].y - g_last_hit_tracker.y[j];
             uint8_t  dist = sqrt16(dx * dx + dy * dy);
             uint16_t tick = scale16by8(g_last_hit_tracker.tick[j], qadd8(rgb_matrix_config.speed, 1));
-            uint16_t eff  = tick + dist * 5;
-            if (eff > 255) eff = 255;
-            amount = qadd8(amount, 255 - eff);
+            uint8_t  a    = solid_fx_amount((uint32_t)tick + (uint32_t)dist * 5);
+            if (a > amount) amount = a;
         }
 
-        rgb_t c = fixed_bg_blend(amount, rgb_matrix_config.hsv);
+        rgb_t c = amount ? solid_fx_blend(amount, bg_hsv) : bg_rgb;
         rgb_matrix_set_color(i, c.r, c.g, c.b);
     }
     return rgb_matrix_check_finished_leds(led_max);

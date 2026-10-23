@@ -60,6 +60,26 @@
               "label": "Color",
               "type": "color",
               "content": ["id_qmk_rgb_matrix_color", 3, 4]
+            },
+            {
+              "showIf": "{id_qmk_rgb_matrix_effect} == 19 || {id_qmk_rgb_matrix_effect} == 22",
+              "label": "Solid FX Color",
+              "type": "color",
+              "content": ["id_solid_fx_color", 0, 1]
+            },
+            {
+              "showIf": "{id_qmk_rgb_matrix_effect} == 19 || {id_qmk_rgb_matrix_effect} == 22",
+              "label": "Solid FX Brightness",
+              "type": "range",
+              "options": [0, 255],
+              "content": ["id_solid_fx_brightness", 0, 2]
+            },
+            {
+              "showIf": "{id_qmk_rgb_matrix_effect} == 19 || {id_qmk_rgb_matrix_effect} == 22",
+              "label": "Solid FX Fade (%)",
+              "type": "range",
+              "options": [0, 100],
+              "content": ["id_solid_fx_fade", 0, 3]
             }
           ]
         }

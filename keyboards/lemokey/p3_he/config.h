@@ -18,6 +18,7 @@
 
 #include "eeconfig_kb.h"
 
+#define EECONFIG_USER_DATA_SIZE 5
 /* External EEPROM Configuration*/
 #define I2C_DRIVER I2CD3
 #define I2C1_SCL_PIN A8
@@ -107,4 +108,3 @@
 /* Factory test keys */
 #define FN_KEY_1 MO(1)
 #define FN_KEY_2 MO(3)
-
