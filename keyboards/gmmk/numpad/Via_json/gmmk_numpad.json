@@ -1,0 +1,92 @@
+{
+  "name": "GMMK Numpad",
+  "vendorId": "0x320F",
+  "productId": "0x5088",
+  "matrix": {
+    "rows": 5,
+    "cols": 4
+  },
+  "keycodes": ["qmk_rgb_matrix_keycodes"],
+  "menus": [
+    "qmk_rgb_matrix",
+    {
+      "label": "Solid FX",
+      "content": [
+        {
+          "label": "Splash / Reactive Colors",
+          "content": [
+            {
+              "label": "Solid FX Color",
+              "type": "color",
+              "content": ["id_solid_fx_color", 0, 1]
+            },
+            {
+              "label": "Solid FX Brightness",
+              "type": "range",
+              "options": [0, 255],
+              "content": ["id_solid_fx_brightness", 0, 2]
+            },
+            {
+              "label": "Solid FX Fade (%)",
+              "type": "range",
+              "options": [0, 100],
+              "content": ["id_solid_fx_fade", 0, 3]
+            }
+          ]
+        },
+        {
+          "label": "Sidelights",
+          "content": [
+            {
+              "label": "Sidelights On",
+              "type": "toggle",
+              "content": ["id_sidelight_enable", 0, 6]
+            },
+            {
+              "label": "Sidelight Color",
+              "type": "color",
+              "content": ["id_sidelight_color", 0, 4]
+            },
+            {
+              "label": "Sidelight Brightness",
+              "type": "range",
+              "options": [0, 255],
+              "content": ["id_sidelight_brightness", 0, 5]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "layouts": {
+    "keymap": [
+      ["0,0", "0,1", "0,2", "0,3", "2,3\n\n\n\n\n\n\n\n\ne0"],
+      [
+        "1,0",
+        "1,1",
+        "1,2",
+        {
+          "h": 2
+        },
+        "1,3"
+      ],
+      ["2,0", "2,1", "2,2"],
+      [
+        "3,0",
+        "3,1",
+        "3,2",
+        {
+          "h": 2
+        },
+        "3,3"
+      ],
+      [
+        {
+          "w": 2
+        },
+        "4,0",
+        "4,3"
+      ]
+    ]
+  }
+}
