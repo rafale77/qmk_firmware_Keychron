@@ -1,2 +1,3 @@
 ANALOG_DRIVER_REQUIRED = yes
 SRC += matrix.c
+RGB_MATRIX_CUSTOM_KB = yes

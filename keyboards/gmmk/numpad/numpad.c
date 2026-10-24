@@ -70,7 +70,7 @@ void keyboard_pre_init_kb(void) {
 }
 #    endif
 
-// ---- Solid FX + sidelights: saved settings and VIA controls ----
+// ---- Solid FX: saved color settings + VIA controls ----
 #if defined(ENABLE_RGB_MATRIX_SOLID_SPLASH) || defined(ENABLE_RGB_MATRIX_SOLID_MULTISPLASH) || defined(ENABLE_RGB_MATRIX_SOLID_REACTIVE_WIDE) || defined(ENABLE_RGB_MATRIX_SOLID_REACTIVE_MULTIWIDE)
 #    define NUMPAD_SOLID_FX
 #    ifdef VIA_ENABLE
@@ -79,31 +79,17 @@ void keyboard_pre_init_kb(void) {
 
 extern uint8_t solid_fx_hue, solid_fx_sat, solid_fx_val, solid_fx_fade_pct;
 
-// Sidelight power-on defaults (VIA changes them at runtime). Override in config.h.
-#    ifndef NUMPAD_SIDE_HUE
-#        define NUMPAD_SIDE_HUE 170 // 0-255 (170 = blue)
-#    endif
-#    ifndef NUMPAD_SIDE_SAT
-#        define NUMPAD_SIDE_SAT 255
-#    endif
-#    ifndef NUMPAD_SIDE_VAL
-#        define NUMPAD_SIDE_VAL 128
-#    endif
-static uint8_t side_hue    = NUMPAD_SIDE_HUE;
-static uint8_t side_sat    = NUMPAD_SIDE_SAT;
-static uint8_t side_val    = NUMPAD_SIDE_VAL;
-static uint8_t side_enable = 1;
-
-#    define SOLID_FX_MAGIC 0xA6 // bumped: stored layout grew from 5 to 9 bytes
+#    define SOLID_FX_MAGIC 0xA6
 
 typedef struct {
-    uint8_t magic, hue, sat, val, fade_pct, side_enable, side_hue, side_sat, side_val;
+    uint8_t magic, hue, sat, val, fade_pct;
+    uint8_t reserved[4]; // unused; keeps the 9-byte layout so the EEPROM isn't reset again
 } solid_fx_eeprom_t;
 
 _Static_assert((EECONFIG_KB_DATA_SIZE) >= sizeof(solid_fx_eeprom_t), "Define EECONFIG_KB_DATA_SIZE 9 in config.h");
 
 static void solid_fx_save(void) {
-    solid_fx_eeprom_t d = {SOLID_FX_MAGIC, solid_fx_hue, solid_fx_sat, solid_fx_val, solid_fx_fade_pct, side_enable, side_hue, side_sat, side_val};
+    solid_fx_eeprom_t d = {SOLID_FX_MAGIC, solid_fx_hue, solid_fx_sat, solid_fx_val, solid_fx_fade_pct, {0}};
     eeconfig_update_kb_datablock(&d, 0, sizeof(d));
 }
 
@@ -118,26 +104,6 @@ static void solid_fx_load(void) {
     solid_fx_sat      = d.sat;
     solid_fx_val      = d.val;
     solid_fx_fade_pct = d.fade_pct > 100 ? 100 : d.fade_pct;
-    side_enable       = d.side_enable ? 1 : 0;
-    side_hue          = d.side_hue;
-    side_sat          = d.side_sat;
-    side_val          = d.side_val;
-}
-
-// Paint the sidelights every frame from their own settings, independent of the effect
-bool rgb_matrix_indicators_advanced_kb(uint8_t led_min, uint8_t led_max) {
-    if (!rgb_matrix_indicators_advanced_user(led_min, led_max)) {
-        return false;
-    }
-    uint8_t v = side_enable ? side_val : 0;
-    if (v > RGB_MATRIX_MAXIMUM_BRIGHTNESS) v = RGB_MATRIX_MAXIMUM_BRIGHTNESS;
-    rgb_t rgb = hsv_to_rgb((hsv_t){side_hue, side_sat, v});
-    for (uint8_t i = led_min; i < led_max; i++) {
-        if (HAS_FLAGS(g_led_config.flags[i], LED_FLAG_UNDERGLOW)) {
-            rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
-        }
-    }
-    return true;
 }
 
 #    ifdef VIA_ENABLE
@@ -149,27 +115,17 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
             solid_fx_save();
             return;
         }
-        if (data[2] >= 1 && data[2] <= 6) { // 1-3 Solid FX, 4-6 sidelights
+        if (data[2] >= 1 && data[2] <= 3) { // 1 = color, 2 = brightness, 3 = fade
             if (data[0] == id_custom_set_value) {
-                switch (data[2]) {
-                    case 1: solid_fx_hue = v[0]; solid_fx_sat = v[1]; break;
-                    case 2: solid_fx_val = v[0]; break;
-                    case 3: solid_fx_fade_pct = v[0] > 100 ? 100 : v[0]; break;
-                    case 4: side_hue = v[0]; side_sat = v[1]; break;
-                    case 5: side_val = v[0]; break;
-                    case 6: side_enable = v[0] ? 1 : 0; break;
-                }
+                if (data[2] == 1) { solid_fx_hue = v[0]; solid_fx_sat = v[1]; }
+                else if (data[2] == 2) { solid_fx_val = v[0]; }
+                else { solid_fx_fade_pct = v[0] > 100 ? 100 : v[0]; }
                 return;
             }
             if (data[0] == id_custom_get_value) {
-                switch (data[2]) {
-                    case 1: v[0] = solid_fx_hue; v[1] = solid_fx_sat; break;
-                    case 2: v[0] = solid_fx_val; break;
-                    case 3: v[0] = solid_fx_fade_pct; break;
-                    case 4: v[0] = side_hue; v[1] = side_sat; break;
-                    case 5: v[0] = side_val; break;
-                    case 6: v[0] = side_enable; break;
-                }
+                if (data[2] == 1) { v[0] = solid_fx_hue; v[1] = solid_fx_sat; }
+                else if (data[2] == 2) { v[0] = solid_fx_val; }
+                else { v[0] = solid_fx_fade_pct; }
                 return;
             }
         }
@@ -179,10 +135,53 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
 #    endif
 #endif
 
+// ---- Sidelights: QMK RGB Light effects shown on the sidelight LEDs ----
+#if defined(RGB_MATRIX_ENABLE) && defined(RGBLIGHT_ENABLE)
+#    define NUMPAD_SIDELIGHTS
+
+static rgb_t side_leds[RGBLIGHT_LED_COUNT];
+
+// RGB Light "driver" with no hardware: it only remembers the colors RGB Light computes
+static void side_init(void) {}
+static void side_set_color(int index, uint8_t red, uint8_t green, uint8_t blue) {
+    if (index >= 0 && index < RGBLIGHT_LED_COUNT) side_leds[index] = (rgb_t){red, green, blue};
+}
+static void side_set_color_all(uint8_t red, uint8_t green, uint8_t blue) {
+    for (int i = 0; i < RGBLIGHT_LED_COUNT; i++) side_set_color(i, red, green, blue);
+}
+static void side_flush(void) {}
+
+const rgblight_driver_t rgblight_driver = {
+    .init          = side_init,
+    .set_color     = side_set_color,
+    .set_color_all = side_set_color_all,
+    .flush         = side_flush,
+};
+
+// Paint the remembered colors onto the sidelight LEDs every frame
+bool rgb_matrix_indicators_advanced_kb(uint8_t led_min, uint8_t led_max) {
+    if (!rgb_matrix_indicators_advanced_user(led_min, led_max)) {
+        return false;
+    }
+    uint8_t k = 0; // position among the sidelight LEDs, counted from LED 0
+    for (uint8_t i = 0; i < RGB_MATRIX_LED_COUNT; i++) {
+        if (!HAS_FLAGS(g_led_config.flags[i], LED_FLAG_UNDERGLOW)) continue;
+        if (i >= led_min && i < led_max) {
+            rgb_t c = (k < RGBLIGHT_LED_COUNT) ? side_leds[k] : (rgb_t){0, 0, 0};
+            rgb_matrix_set_color(i, c.r, c.g, c.b);
+        }
+        k++;
+    }
+    return true;
+}
+#endif
+
 void keyboard_post_init_kb(void) {
   #ifdef NUMPAD_SOLID_FX
       solid_fx_load();
-      rgb_matrix_set_flags_noeeprom(LED_FLAG_KEYLIGHT | LED_FLAG_MODIFIER);
+  #endif
+  #ifdef NUMPAD_SIDELIGHTS
+      rgb_matrix_set_flags_noeeprom(LED_FLAG_KEYLIGHT | LED_FLAG_MODIFIER); // effects run on the keys only
   #endif
     keyboard_post_init_user();
 }

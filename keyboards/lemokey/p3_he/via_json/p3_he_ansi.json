@@ -2,7 +2,7 @@
   "name": "Lemokey P3 HE ANSI",
   "vendorId": "0x362D",
   "productId": "0x0630",
-  "keycodes": ["qmk_lighting"],
+  "keycodes": ["qmk_rgb_matrix_keycodes"],
   "menus": [
     {
       "label": "Lighting",
