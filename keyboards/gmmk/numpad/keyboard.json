@@ -23,6 +23,8 @@
             {"pin_a": "A2", "pin_b": "A1"}
         ]
     },
+    "timeout": 1200000,
+    "sleep": true,
     "rgb_matrix": {
       "animations": {
           "alphas_mods": true,

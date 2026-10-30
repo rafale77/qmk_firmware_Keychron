@@ -51,11 +51,11 @@
             "solid_multisplash": true
         },
         "default": {
-            "animation": "alphas_mods",
-            "hue": 187,
+            "animation": "solid_multisplash",
+            "hue": 145,
             "sat": 255,
-            "val": 220,
-            "speed": 64
+            "val": 255,
+            "speed": 25
         },
         "max_brightness": 220,
         "timeout": 1200000,

@@ -200,7 +200,7 @@ bool rgb_matrix_indicators_advanced_kb(uint8_t led_min, uint8_t led_max) {
 void eeconfig_init_kb(void) {
 #ifdef RGBLIGHT_ENABLE
     rgblight_enable();
-    rgblight_sethsv(45, 255, 255);
+    rgblight_sethsv(27, 255, 255);
     rgblight_mode(RGBLIGHT_MODE_BREATHING + 1);
 #endif
     eeconfig_init_user();

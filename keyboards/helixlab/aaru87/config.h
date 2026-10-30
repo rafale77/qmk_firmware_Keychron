@@ -18,7 +18,7 @@
 #endif
 
 // Correct colors for strange strong blue on Aaru. Cyan
-#define SOLID_FX_HUE_DEG 60    // animation color hue, 0-360 (60 = yellow)
+#define SOLID_FX_HUE_DEG 34    // animation color hue, 0-360 (60 = yellow)
 #define SOLID_FX_SAT_PCT 100   // 0-100
 #define SOLID_FX_VAL_PCT 100   // 0-100
 

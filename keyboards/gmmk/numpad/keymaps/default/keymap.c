@@ -47,34 +47,33 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 // Potentiometer Slider, MIDI Control
 
 uint8_t divisor = 0;
-uint16_t last_slider_value = 0;  // Track previous value
 
-#define SLIDER_MAX_READING 1023 // full-scale analogReadPin() value (the 0-1023 your code assumes)
-#define SLIDER_DEADBAND    6    // ignore ADC jitter smaller than this
+#define SLIDER_MIN_READING 8     // reading with the slider at the bottom stop (measure yours)
+#define SLIDER_MAX_READING 950  // reading at the top stop; keep it a few counts BELOW the real maximum
+#define SLIDER_HYSTERESIS  4     // brightness units a move must exceed to be applied (limits flicker)
 
 void slider(void) {
     if (divisor++) { /* only run the slider function 1/256 times it's called */
         return;
     }
 
-    static bool synced = false;
+    static int16_t last_val = -1; // brightness the slider last applied; -1 = not synced yet
 
     uint16_t reading = analogReadPin(SLIDER_PIN);
+    if (reading < SLIDER_MIN_READING) reading = SLIDER_MIN_READING;
     if (reading > SLIDER_MAX_READING) reading = SLIDER_MAX_READING;
 
-    if (!synced) { // first read after boot: remember the position, keep the saved brightness
-        last_slider_value = reading;
-        synced            = true;
+    // Position -> brightness, exactly 0 at the bottom and exactly the board's maximum at the top
+    uint8_t val = ((uint32_t)(reading - SLIDER_MIN_READING) * RGB_MATRIX_MAXIMUM_BRIGHTNESS) / (SLIDER_MAX_READING - SLIDER_MIN_READING);
+
+    if (last_val < 0) { // first read after boot: remember the position, keep the saved brightness
+        last_val = val;
         return;
     }
 
-    // Only react to real movement. last_slider_value only updates when we act, so slow drags still register.
-    if (abs((int16_t)reading - (int16_t)last_slider_value) > SLIDER_DEADBAND) {
-        last_slider_value = reading;
-
-        // Slider position -> brightness, 0 up to the board's maximum
-        uint8_t val = ((uint32_t)reading * RGB_MATRIX_MAXIMUM_BRIGHTNESS) / SLIDER_MAX_READING;
-
+    bool at_end = (val == 0 || val == RGB_MATRIX_MAXIMUM_BRIGHTNESS);
+    if (abs((int16_t)val - last_val) >= SLIDER_HYSTERESIS || (at_end && val != last_val)) {
+        last_val  = val;
         hsv_t hsv = rgb_matrix_get_hsv();
         rgb_matrix_sethsv(hsv.h, hsv.s, val);
     }
