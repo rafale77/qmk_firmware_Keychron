@@ -23,9 +23,8 @@
             {"pin_a": "A2", "pin_b": "A1"}
         ]
     },
-    "timeout": 1200000,
-    "sleep": true,
     "rgb_matrix": {
+      "driver": "aw20216s",
       "animations": {
           "alphas_mods": true,
           "gradient_up_down": true,
@@ -67,7 +66,8 @@
           "solid_splash": true,
           "solid_multisplash": true
       },
-        "driver": "aw20216s",
+        "timeout": 1200000,
+        "sleep": true,
         "layout": [
             {"matrix": [0, 0], "x": 45, "y": 0, "flags": 4},
             {"matrix": [0, 1], "x": 90, "y": 0, "flags": 4},
