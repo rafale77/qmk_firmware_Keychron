@@ -15,12 +15,21 @@
 // Persistent storage for the Solid FX settings (4 bytes: hue, sat, val, fade)
 #    define EECONFIG_KB_DATA_SIZE 5
 
+#    define IS31FL3733_GLOBAL_CURRENT 0xC0   // default is 0xFF
+#    define IS31FL3733_SW_PULLUP   IS31FL3733_PUR_8K_OHM
+#    define IS31FL3733_CS_PULLDOWN IS31FL3733_PDR_8K_OHM
 #endif
 
-// Correct colors for strange strong blue on Aaru. Cyan
-#define SOLID_FX_HUE_DEG 34    // animation color hue, 0-360 (60 = yellow)
+// Correct colors for strange strong blue on Aaru. Orange
+#define SOLID_FX_HUE_DEG 24    // animation color hue, 0-360 (60 = yellow) 34 before white balance 23 after
 #define SOLID_FX_SAT_PCT 100   // 0-100
 #define SOLID_FX_VAL_PCT 100   // 0-100
 
 #define SOLID_FX_FADE_PCT 50   // share of the animation spent fading out
 // #define SOLID_FX_LENGTH 255 // optional: animation lifetime in ticks (stock = 255)
+
+// Global white balance: 255 = unchanged, lower = weaker channel. Tune by eye.
+#    define AARU87_GAIN_R 140
+#    define AARU87_GAIN_G 255
+#    define AARU87_GAIN_B 120
+#    define AARU87_BOARD_B   // uncomment when flashing your second PCB

@@ -52,12 +52,12 @@
         },
         "default": {
             "animation": "solid_multisplash",
-            "hue": 145,
+            "hue": 128,
             "sat": 255,
             "val": 255,
             "speed": 25
         },
-        "max_brightness": 220,
+        "rgb_matrix.max_brightness": 160,
         "timeout": 1200000,
         "sleep": true,
         "led_flush_limit": 25,

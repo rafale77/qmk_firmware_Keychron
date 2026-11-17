@@ -88,22 +88,18 @@ const uint8_t driver_sync[IS31FL3733_DRIVER_COUNT] = {
 #endif
 };
 
-// These buffers match the IS31FL3733 PWM registers.
-// The control buffers match the page 0 LED On/Off registers.
-// Storing them like this is optimal for I2C transfers to the registers.
-// We could optimize this and take out the unused registers from these
-// buffers and the transfers in is31fl3733_write_pwm_buffer() but it's
-// probably not worth the extra complexity.
 typedef struct is31fl3733_driver_t {
-    uint8_t pwm_buffer[IS31FL3733_PWM_REGISTER_COUNT];
-    bool    pwm_buffer_dirty;
-    uint8_t led_control_buffer[IS31FL3733_LED_CONTROL_REGISTER_COUNT];
-    bool    led_control_buffer_dirty;
+    uint8_t  pwm_buffer[IS31FL3733_PWM_REGISTER_COUNT];
+    bool     pwm_buffer_dirty;
+    uint16_t pwm_block_dirty; // bit n set = the 16-byte PWM block for scan row n+1 has changed
+    uint8_t  led_control_buffer[IS31FL3733_LED_CONTROL_REGISTER_COUNT];
+    bool     led_control_buffer_dirty;
 } PACKED is31fl3733_driver_t;
 
 is31fl3733_driver_t driver_buffers[IS31FL3733_DRIVER_COUNT] = {{
     .pwm_buffer               = {0},
     .pwm_buffer_dirty         = false,
+    .pwm_block_dirty          = 0,
     .led_control_buffer       = {0},
     .led_control_buffer_dirty = false,
 }};
@@ -123,20 +119,30 @@ void is31fl3733_select_page(uint8_t index, uint8_t page) {
     is31fl3733_write_register(index, IS31FL3733_REG_COMMAND, page);
 }
 
-void is31fl3733_write_pwm_buffer(uint8_t index) {
-    // Assumes page 1 is already selected.
-    // Transmit PWM registers in 12 transfers of 16 bytes.
-
-    // Iterate over the pwm_buffer contents at 16 byte intervals.
-    for (uint8_t i = 0; i < IS31FL3733_PWM_REGISTER_COUNT; i += 16) {
+// Write 'length' bytes starting at register 'reg'. The chip auto-increments the register address.
+// Returns true on success; honours IS31FL3733_I2C_PERSISTENCE retries.
+static bool is31fl3733_write_block(uint8_t index, uint8_t reg, const uint8_t *data, uint8_t length) {
 #if IS31FL3733_I2C_PERSISTENCE > 0
-        for (uint8_t j = 0; j < IS31FL3733_I2C_PERSISTENCE; j++) {
-            if (i2c_write_register(i2c_addresses[index] << 1, i, driver_buffers[index].pwm_buffer + i, 16, IS31FL3733_I2C_TIMEOUT) == I2C_STATUS_SUCCESS) break;
-        }
-#else
-        i2c_write_register(i2c_addresses[index] << 1, i, driver_buffers[index].pwm_buffer + i, 16, IS31FL3733_I2C_TIMEOUT);
-#endif
+    for (uint8_t i = 0; i < IS31FL3733_I2C_PERSISTENCE; i++) {
+        if (i2c_write_register(i2c_addresses[index] << 1, reg, (uint8_t *)data, length, IS31FL3733_I2C_TIMEOUT) == I2C_STATUS_SUCCESS) return true;
     }
+    return false;
+#else
+    return i2c_write_register(i2c_addresses[index] << 1, reg, (uint8_t *)data, length, IS31FL3733_I2C_TIMEOUT) == I2C_STATUS_SUCCESS;
+#endif
+}
+
+void is31fl3733_write_pwm_buffer(uint8_t index) {
+    // Assumes page 1 is already selected. Each 16-byte block is one scan row; send only changed blocks.
+    uint16_t pending = driver_buffers[index].pwm_block_dirty;
+
+    for (uint8_t block = 0; block < IS31FL3733_PWM_REGISTER_COUNT / 16; block++) {
+        uint16_t bit = (uint16_t)1 << block;
+        if (!(pending & bit)) continue;
+        uint8_t reg = block * 16;
+        if (is31fl3733_write_block(index, reg, driver_buffers[index].pwm_buffer + reg, 16)) pending &= ~bit;
+    }
+    driver_buffers[index].pwm_block_dirty = pending;
 }
 
 void is31fl3733_init_drivers(void) {
@@ -166,19 +172,19 @@ void is31fl3733_init(uint8_t index) {
     // Set up the mode and other settings, clear the PWM registers,
     // then disable software shutdown.
 
+    static const uint8_t zeros[IS31FL3733_LED_CONTROL_REGISTER_COUNT] = {0};
     is31fl3733_select_page(index, IS31FL3733_COMMAND_LED_CONTROL);
 
-    // Turn off all LEDs.
-    for (uint8_t i = 0; i < IS31FL3733_LED_CONTROL_REGISTER_COUNT; i++) {
-        is31fl3733_write_register(index, i, 0x00);
-    }
+    // Turn off all LEDs. one 24-byte transfer instead of 24 single-byte writes.
+    is31fl3733_write_block(index, 0x00, zeros, IS31FL3733_LED_CONTROL_REGISTER_COUNT);
 
     is31fl3733_select_page(index, IS31FL3733_COMMAND_PWM);
 
-    // Set PWM on all LEDs to 0
+
+    // Set PWM on all LEDs to 0: 12 transfers of 16 bytes instead of 192 single-byte writes.
     // No need to setup Breath registers to PWM as that is the default.
-    for (uint8_t i = 0; i < IS31FL3733_PWM_REGISTER_COUNT; i++) {
-        is31fl3733_write_register(index, i, 0x00);
+    for (uint8_t reg = 0; reg < IS31FL3733_PWM_REGISTER_COUNT; reg += 16) {
+        is31fl3733_write_block(index, reg, zeros, 16);
     }
 
     is31fl3733_select_page(index, IS31FL3733_COMMAND_FUNCTION);
@@ -198,20 +204,25 @@ void is31fl3733_init(uint8_t index) {
     wait_ms(10);
 }
 
+// Optional per-board color correction; the default does nothing
+__attribute__((weak)) void is31fl3733_trim_color(int index, uint8_t *red, uint8_t *green, uint8_t *blue) {}
+
 void is31fl3733_set_color(int index, uint8_t red, uint8_t green, uint8_t blue) {
-    is31fl3733_led_t led;
+    is31fl3733_trim_color(index, &red, &green, &blue); // per-board color correction (keep)
 
     if (index >= 0 && index < IS31FL3733_LED_COUNT) {
+        is31fl3733_led_t led;
         memcpy_P(&led, (&g_is31fl3733_leds[index]), sizeof(led));
 
-        if (driver_buffers[led.driver].pwm_buffer[led.r] == red && driver_buffers[led.driver].pwm_buffer[led.g] == green && driver_buffers[led.driver].pwm_buffer[led.b] == blue) {
-            return;
+        is31fl3733_driver_t *drv   = &driver_buffers[led.driver];
+        uint16_t             dirty = 0;
+        if (drv->pwm_buffer[led.r] != red)   { drv->pwm_buffer[led.r] = red;   dirty |= (uint16_t)1 << (led.r / 16); }
+        if (drv->pwm_buffer[led.g] != green) { drv->pwm_buffer[led.g] = green; dirty |= (uint16_t)1 << (led.g / 16); }
+        if (drv->pwm_buffer[led.b] != blue)  { drv->pwm_buffer[led.b] = blue;  dirty |= (uint16_t)1 << (led.b / 16); }
+        if (dirty) {
+            drv->pwm_block_dirty |= dirty;
+            drv->pwm_buffer_dirty = true;
         }
-
-        driver_buffers[led.driver].pwm_buffer[led.r] = red;
-        driver_buffers[led.driver].pwm_buffer[led.g] = green;
-        driver_buffers[led.driver].pwm_buffer[led.b] = blue;
-        driver_buffers[led.driver].pwm_buffer_dirty  = true;
     }
 }
 
@@ -254,21 +265,15 @@ void is31fl3733_set_led_control_register(uint8_t index, bool red, bool green, bo
 void is31fl3733_update_pwm_buffers(uint8_t index) {
     if (driver_buffers[index].pwm_buffer_dirty) {
         is31fl3733_select_page(index, IS31FL3733_COMMAND_PWM);
-
         is31fl3733_write_pwm_buffer(index);
-
-        driver_buffers[index].pwm_buffer_dirty = false;
+        driver_buffers[index].pwm_buffer_dirty = (driver_buffers[index].pwm_block_dirty != 0);
     }
 }
 
 void is31fl3733_update_led_control_registers(uint8_t index) {
     if (driver_buffers[index].led_control_buffer_dirty) {
         is31fl3733_select_page(index, IS31FL3733_COMMAND_LED_CONTROL);
-
-        for (uint8_t i = 0; i < IS31FL3733_LED_CONTROL_REGISTER_COUNT; i++) {
-            is31fl3733_write_register(index, i, driver_buffers[index].led_control_buffer[i]);
-        }
-
+        is31fl3733_write_block(index, 0x00, driver_buffers[index].led_control_buffer, IS31FL3733_LED_CONTROL_REGISTER_COUNT);
         driver_buffers[index].led_control_buffer_dirty = false;
     }
 }

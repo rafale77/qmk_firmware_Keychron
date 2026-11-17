@@ -2,6 +2,31 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include QMK_KEYBOARD_H
 
+#ifdef RGB_MATRIX_ENABLE
+#    include "color_trim.h"
+
+// value * gain / 256; gain 255 returns the value unchanged (and skips the multiply)
+static inline uint8_t trim_scale(uint8_t value, uint8_t gain) {
+    if (gain == 255 || value == 0) return value;
+    return (uint8_t)(((uint16_t)value * gain) >> 8);
+}
+
+void is31fl3733_trim_color(int index, uint8_t *r, uint8_t *g, uint8_t *b);
+void is31fl3733_trim_color(int index, uint8_t *r, uint8_t *g, uint8_t *b) {
+    *r = trim_scale(*r, AARU87_GAIN_R);
+    *g = trim_scale(*g, AARU87_GAIN_G);
+    *b = trim_scale(*b, AARU87_GAIN_B);
+    if (index >= 0 && index < 87) {
+        uint8_t tr = pgm_read_byte(&led_trim[index][0]);
+        uint8_t tg = pgm_read_byte(&led_trim[index][1]);
+        uint8_t tb = pgm_read_byte(&led_trim[index][2]);
+        *r = trim_scale(*r, tr);
+        *g = trim_scale(*g, tg);
+        *b = trim_scale(*b, tb);
+    }
+}
+#endif
+
 #if defined(RGB_MATRIX_ENABLE) && (defined(ENABLE_RGB_MATRIX_SOLID_SPLASH) || defined(ENABLE_RGB_MATRIX_SOLID_MULTISPLASH) || defined(ENABLE_RGB_MATRIX_SOLID_REACTIVE_WIDE) || defined(ENABLE_RGB_MATRIX_SOLID_REACTIVE_MULTIWIDE))
 #    define AARU87_SOLID_FX
 #    ifdef VIA_ENABLE
